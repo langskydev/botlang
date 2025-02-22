@@ -1,12 +1,14 @@
-const moment = require('moment');
+const moment = require('moment-timezone');
 
 async function handleMessage(sock, message) {
-    const msgText = message.message.conversation || message.message.extendedTextMessage?.text || "";
+    const msgText = message.message.conversation ||
+        message.message.extendedTextMessage?.text ||
+        "";
     const remoteJid = message.key.remoteJid;
     
     if (msgText.toLowerCase() === "list") {
-        // Tentukan salam berdasarkan waktu
-        const now = moment().locale('id');
+        // Tentukan waktu dengan zona waktu Asia/Jakarta
+        const now = moment().tz("Asia/Jakarta").locale('id');
         const currentHour = now.hour();
         let greeting = 'Selamat pagi';
         if (currentHour >= 12 && currentHour < 15) {

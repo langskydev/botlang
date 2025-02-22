@@ -20,7 +20,7 @@ async function handlePromote(sock, m) {
       return;
     }
 
-    // Jika perintah berhenti promosi: "stoppromote"
+    // Perintah berhenti promosi: "stoppromote"
     if (messageContent.toLowerCase().trim() === "stoppromote") {
       if (promotionInterval) {
         clearInterval(promotionInterval);
@@ -59,8 +59,16 @@ async function handlePromote(sock, m) {
     }
 
     // Ambil daftar semua grup yang diikuti bot
-    const groups = await sock.groupFetchAllParticipating();
+    let groups;
+    try {
+      groups = await sock.groupFetchAllParticipating();
+    } catch (error) {
+      console.error("Error fetching participating groups:", error);
+      await sock.sendMessage(sender, { text: "Gagal mengambil daftar grup. Promosi dibatalkan." });
+      return;
+    }
     const allGroupIds = Object.keys(groups);
+    // Target grup: semua grup kecuali yang ada di groupConfig.allowedGroups
     const targetGroupIds = allGroupIds.filter(id => !groupConfig.allowedGroups.includes(id));
 
     // Fungsi untuk mengirim promo ke satu grup
@@ -72,42 +80,48 @@ async function handlePromote(sock, m) {
       const payload = imageBuffer
         ? { image: imageBuffer, caption: promoteText, mentions }
         : { text: promoteText, mentions };
-      await sock.sendMessage(groupId, payload);
-    }
-
-    // Kirim pesan awal ke seluruh target grup (dengan tag ke semua member)
-    for (const groupId of targetGroupIds) {
       try {
-        const groupData = groups[groupId];
-        await sendPromo(groupId, groupData);
+        await sock.sendMessage(groupId, payload);
       } catch (error) {
-        console.error(`Gagal mengirim pesan ke grup ${groupId}:`, error);
+        console.error(`Gagal mengirim promo ke grup ${groupId}:`, error);
       }
     }
 
+    // Kirim pesan awal ke seluruh target grup secara paralel (tanpa delay)
+    await Promise.all(targetGroupIds.map(async groupId => {
+      const groupData = groups[groupId];
+      await sendPromo(groupId, groupData);
+    }));
+
     // Konfirmasi ke admin bahwa pesan awal telah dikirim
     await sock.sendMessage(sender, { 
-      text: `Promosi telah dikirim ke ${targetGroupIds.length} grup. Pesan akan dikirim ulang setiap 20 menit dengan tag ke semua member.` 
+      text: `Promosi telah dikirim ke ${targetGroupIds.length} grup. Pesan akan dikirim ulang setiap ${groupConfig.promotionInterval / 60000} menit.` 
     });
 
-    // Jika sudah ada interval promosi yang berjalan, hentikan terlebih dahulu
+    // Hentikan interval promosi jika sedang berjalan
     if (promotionInterval) {
       clearInterval(promotionInterval);
     }
 
-    // Set interval untuk mengirim ulang pesan setiap 20 menit
+    // Set interval untuk mengirim ulang pesan sesuai konfigurasi
     promotionInterval = setInterval(async () => {
       try {
-        const groupsInterval = await sock.groupFetchAllParticipating();
+        let groupsInterval;
+        try {
+          groupsInterval = await sock.groupFetchAllParticipating();
+        } catch (error) {
+          console.error("Error fetching groups in interval:", error);
+          return;
+        }
         const groupIdsInterval = Object.keys(groupsInterval).filter(id => !groupConfig.allowedGroups.includes(id));
-        for (const groupId of groupIdsInterval) {
+        await Promise.all(groupIdsInterval.map(async groupId => {
           const groupData = groupsInterval[groupId];
           await sendPromo(groupId, groupData);
-        }
+        }));
       } catch (error) {
         console.error("Error saat mengirim pesan ulang promosi:", error);
       }
-    }, 1200000); // 1200000 ms = 20 menit
+    }, groupConfig.promotionInterval);
 
   } catch (err) {
     console.error("Error pada fitur promote:", err);

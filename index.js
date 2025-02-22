@@ -35,11 +35,12 @@ if (process.argv[1] && process.argv[1].includes('tempcoderunnerfile.js')) {
 async function connectToWhatsApp() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+        // Tambahkan queryTimeoutMs untuk memperpanjang waktu timeout query (misalnya 60 detik)
         const sock = makeWASocket({
             auth: state,
             printQRInTerminal: true,
-            // Atur logger untuk hanya menampilkan pesan error
-            logger: pino({ level: 'error' })
+            logger: pino({ level: 'error' }),
+            queryTimeoutMs: 60000 // timeout query diperpanjang menjadi 60 detik
         });
 
         // Menangani update koneksi
@@ -48,13 +49,12 @@ async function connectToWhatsApp() {
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-                console.log('Connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
+                if (lastDisconnect?.error) {
+                    console.error('Connection closed due to', lastDisconnect.error, ', reconnecting:', shouldReconnect);
+                }
                 if (shouldReconnect) {
-                    // Beri delay 5 detik sebelum reconnect
                     setTimeout(connectToWhatsApp, 5000);
                 }
-            } else if (connection === 'open') {
-                console.log('WhatsApp Bot Connected');
             }
         });
 
@@ -67,7 +67,11 @@ async function connectToWhatsApp() {
 
         // Pendaftaran event group-participants.update hanya sekali (di luar messages.upsert)
         sock.ev.on('group-participants.update', async (update) => {
-            await welcomeHandler(sock, update);
+            try {
+                await welcomeHandler(sock, update);
+            } catch (error) {
+                console.error('Error pada welcomeHandler:', error);
+            }
         });
 
         sock.ev.on('messages.upsert', async (event) => {
@@ -75,35 +79,81 @@ async function connectToWhatsApp() {
                 if (!m.message) continue;
                 if (m.key.fromMe) continue;
 
-                await handleAfk(sock, m);
-                await hidetag(sock, m);
-                await forbiddenWordChecker(sock, m);
-                await antilinkHandler(sock, m);
-                await tutupGrup(sock, m);
-                await bukaGrup(sock, m);
+                try {
+                    await handleAfk(sock, m);
+                } catch (error) {
+                    console.error('Error di handleAfk:', error);
+                }
+
+                try {
+                    await hidetag(sock, m);
+                } catch (error) {
+                    console.error('Error di hidetag:', error);
+                }
+
+                try {
+                    await forbiddenWordChecker(sock, m);
+                } catch (error) {
+                    console.error('Error di forbiddenWordChecker:', error);
+                }
+
+                try {
+                    await antilinkHandler(sock, m);
+                } catch (error) {
+                    console.error('Error di antilinkHandler:', error);
+                }
+
+                try {
+                    await tutupGrup(sock, m);
+                } catch (error) {
+                    console.error('Error di tutupGrup:', error);
+                }
+
+                try {
+                    await bukaGrup(sock, m);
+                } catch (error) {
+                    console.error('Error di bukaGrup:', error);
+                }
 
                 const remoteJid = m.key.remoteJid;
 
                 if (!remoteJid.endsWith('@g.us')) {
-                    await handlePromote(sock, m);
-                    await handleForbiddenWordCommand(sock, m);
+                    try {
+                        await handlePromote(sock, m);
+                    } catch (error) {
+                        console.error('Error di handlePromote:', error);
+                    }
+
+                    try {
+                        await handleForbiddenWordCommand(sock, m);
+                    } catch (error) {
+                        console.error('Error di handleForbiddenWordCommand:', error);
+                    }
                 }
 
-                // Jika pesan berasal dari grup yang diizinkan, panggil fitur list
                 if (groupConfig.allowedGroups.includes(remoteJid)) {
-                    listFeature.handleMessage(sock, m);
+                    try {
+                        listFeature.handleMessage(sock, m);
+                    } catch (error) {
+                        console.error('Error di listFeature.handleMessage:', error);
+                    }
                 }
 
-                // Panggil fitur harga untuk perintah add/edit/delete dan query harga
-                priceManager.handlePriceCommand(sock, m);
+                try {
+                    priceManager.handlePriceCommand(sock, m);
+                } catch (error) {
+                    console.error('Error di priceManager.handlePriceCommand:', error);
+                }
 
-                // Panggil fitur pesan pesanan (pending) ketika admin reply pesan "p"
-                pendingOrder.handlePendingMessage(sock, m);
+                try {
+                    pendingOrder.handlePendingMessage(sock, m);
+                } catch (error) {
+                    console.error('Error di pendingOrder.handlePendingMessage:', error);
+                }
             }
         });
     } catch (error) {
         console.error('Error saat menghubungkan ke WhatsApp:', error);
-        // Jika terjadi error saat inisialisasi, tunggu 5 detik sebelum mencoba kembali
         setTimeout(connectToWhatsApp, 5000);
     }
 }

@@ -14,8 +14,15 @@ module.exports = {
     const messageContent = m.message.conversation || m.message.extendedTextMessage?.text;
     if (!messageContent) return;
 
-    // Ambil metadata grup untuk mention semua member
-    const groupMetadata = await sock.groupMetadata(m.key.remoteJid);
+    // Ambil metadata grup dengan penanganan error (misal timeout)
+    let groupMetadata;
+    try {
+      groupMetadata = await sock.groupMetadata(m.key.remoteJid);
+    } catch (error) {
+      console.error("Error fetching group metadata:", error);
+      // Jika terjadi error, hentikan eksekusi fungsi
+      return;
+    }
     const allMembers = groupMetadata.participants.map(p => p.jid);
 
     // Jika admin sudah AFK, maka pesan apapun dianggap sebagai tanda "kembali"
