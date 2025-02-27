@@ -1,64 +1,94 @@
-// /src/fitur/group/antilink.js
+const { groupId } = require('../../config');
+const state = require('../../state');
 
-// Impor daftar id grup yang diijinkan
-const { allowedGroups } = require('../../groupConfig');
+const linkOffenses = {}; // Menyimpan jumlah pelanggaran per member
 
-// Objek untuk menyimpan hitungan peringatan per grup dan per anggota
-const warningCounts = {};
+async function handleAntilink(sock) {
+  sock.ev.on('messages.upsert', async (event) => {
+    try {
+      // Jika fitur antilink nonaktif, lewati semua pesan
+      if (!state.antilinkEnabled) return;
 
-const antilinkHandler = async (sock, message) => {
-  try {
-    const remoteJid = message.key.remoteJid;
-    // Pastikan hanya diproses jika pesan berasal dari grup
-    if (!remoteJid.endsWith('@g.us')) return;
-    
-    // Cek apakah id grup termasuk dalam daftar yang diijinkan
-    if (!allowedGroups.includes(remoteJid)) return;
+      for (const message of event.messages) {
+        if (message.key.fromMe) continue;
+        if (!message.message) continue;
+        const chatId = message.key.remoteJid;
+        if (!chatId.endsWith('@g.us')) continue;
+        
+        // Ambil teks dari pesan (conversation, extendedTextMessage, atau caption imageMessage)
+        let text = "";
+        if (message.message.conversation) {
+          text = message.message.conversation;
+        } else if (message.message.extendedTextMessage?.text) {
+          text = message.message.extendedTextMessage.text;
+        } else if (message.message.imageMessage?.caption) {
+          text = message.message.imageMessage.caption;
+        }
+        text = text.trim();
+        if (!text) continue;
+        
+        // Deteksi link dengan regex
+        const linkRegex = /(http|https|wa\.me|www)/i;
+        if (!linkRegex.test(text)) continue;
+        
+        // Dapatkan metadata grup dan periksa apakah pengirim adalah admin
+        const groupMeta = await sock.groupMetadata(chatId);
+        const senderId = message.key.participant;
+        const isAdmin = groupMeta.participants.some(
+          (p) => p.id === senderId && (p.admin === "admin" || p.admin === "superadmin")
+        );
+        // Jika pengirim adalah admin, lewati pemrosesan
+        if (isAdmin) continue;
+        
+        // Hapus pesan yang mengandung link
+        await sock.sendMessage(chatId, { delete: message.key });
+        
+        // Tingkatkan counter pelanggaran untuk pengirim
+        if (!linkOffenses[senderId]) {
+          linkOffenses[senderId] = 0;
+        }
+        linkOffenses[senderId]++;
+        
+        // Ambil tanggal & waktu dengan timezone Asia/Jakarta (WIB)
+        const now = new Date();
+        const tanggal = now.toLocaleDateString('id-ID', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          timeZone: 'Asia/Jakarta'
+        });
+        const waktu = now.toLocaleTimeString('id-ID', {
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          timeZone: 'Asia/Jakarta', hour12: false
+        });
+        
+        if (linkOffenses[senderId] < 3) {
+          const warningMessage =
+`╭─❒ 「 ⚠️ LINK DETECTED 」  
+│ 📆 Tanggal: ${tanggal}  
+│ ⏰ Waktu: ${waktu}  
+│ 🚫 Status: Peringatan ke-${linkOffenses[senderId]}  
+│ 👤 Pengirim: @${senderId.split('@')[0]}  
+╰───────────────❍  
 
-    // Ambil ID pengirim pesan
-    const sender = message.key.participant || message.key.remoteJid;
+📢 Harap jangan mengirim link! Jika kamu mengirim link lagi, kamu akan dikeluarkan dari grup.`;
+          await sock.sendMessage(chatId, { text: warningMessage, mentions: [senderId] }, { quoted: message });
+        } else {
+          const kickMessage =
+`╭─❒ 「 🚫 𝗞𝗜𝗖𝗞 」  
+│ 📆 Tanggal: ${tanggal}  
+│ ⏰ Waktu: ${waktu}  
+│ ⚠️ Alasan: Pengiriman link berulang  
+│ 👤 Pengirim: @${senderId.split('@')[0]}  
+╰───────────────❍  
 
-    // Ambil teks pesan dari pesan teks atau extendedTextMessage
-    let text =
-      message.message.conversation ||
-      message.message.extendedTextMessage?.text ||
-      "";
-    text = text.trim();
-
-    // Cek apakah pesan mengandung link (http, https, atau wa.me)
-    const linkRegex = /(https?:\/\/|wa\.me\/)/i;
-    if (!linkRegex.test(text)) return; // Jika tidak ada link, keluar dari fungsi
-
-    // Hapus pesan untuk semua orang
-    await sock.sendMessage(remoteJid, { delete: message.key });
-    console.log(`Pesan link dari ${sender} dihapus`);
-
-    // Inisialisasi count per grup dan per pengirim jika belum ada
-    if (!warningCounts[remoteJid]) warningCounts[remoteJid] = {};
-    if (!warningCounts[remoteJid][sender]) warningCounts[remoteJid][sender] = 0;
-
-    // Tambah hitungan peringatan
-    warningCounts[remoteJid][sender]++;
-
-    // Jika hitungan peringatan kurang dari 3, kirim pesan peringatan
-    if (warningCounts[remoteJid][sender] < 3) {
-      await sock.sendMessage(remoteJid, {
-        text: `@${sender.split("@")[0]}, jangan kirim link! Peringatan ${warningCounts[remoteJid][sender]}/3`,
-        mentions: [sender]
-      });
-    } else {
-      // Jika peringatan mencapai 3x, keluarkan user dari grup
-      await sock.sendMessage(remoteJid, {
-        text: `@${sender.split("@")[0]} telah dikeluarkan karena terus mengirim link.`,
-        mentions: [sender]
-      });
-      await sock.groupParticipantsUpdate(remoteJid, [sender], 'remove');
-      // Reset hitungan peringatan untuk pengirim tersebut
-      warningCounts[remoteJid][sender] = 0;
+⚠️ Kamu telah melanggar peraturan grup dan akan dikeluarkan.`;
+          await sock.sendMessage(chatId, { text: kickMessage, mentions: [senderId] }, { quoted: message });
+          await sock.groupParticipantsUpdate(chatId, [senderId], 'remove');
+        }
+      }
+    } catch (err) {
+      console.error("Error in antilink feature:", err);
     }
-  } catch (error) {
-    console.error("Error in antilinkHandler:", error);
-  }
-};
+  });
+}
 
-module.exports = { antilinkHandler };
+module.exports = { handleAntilink };

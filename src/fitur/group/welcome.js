@@ -1,43 +1,30 @@
-// /src/fitur/group/welcome.js
-const groupConfig = require('../../groupConfig.js'); // sesuaikan path jika perlu
-const welcomedMembers = {};
+const { groupId } = require('../../config');
+const state = require('../../state');
 
-const welcomeHandler = async (sock, update) => {
-  try {
-    const { id, participants, action } = update;
-    if (action !== "add") return; // Hanya proses event "add" (anggota baru)
+async function handleWelcome(sock) {
+  sock.ev.on('group-participants.update', async (update) => {
+    try {
+      // Jika fitur welcome nonaktif, langsung hentikan proses
+      if (!state.welcomeEnabled) return;
 
-    // Hanya aktif jika grup ini sudah dikonfigurasi di groupConfig.js
-    if (!groupConfig.allowedGroups.includes(id)) return;
+      // Proses hanya untuk grup yang dikonfigurasi dan aksi penambahan anggota
+      if (update.id === groupId && update.action === 'add' && update.participants) {
+        const metadata = await sock.groupMetadata(update.id);
+        const groupName = metadata.subject;
+        for (let participant of update.participants) {
+          const welcomeMessage = 
+`🎉 Selamat Datang di ${groupName}! 🎉
 
-    const groupMeta = await sock.groupMetadata(id);
-    const groupName = groupMeta.subject;
-    
-    // Inisialisasi cache untuk grup jika belum ada
-    if (!welcomedMembers[id]) {
-      welcomedMembers[id] = new Set();
+Hai, @${participant.split('@')[0]}! 👋 Senang kamu bergabung di sini. Untuk melihat daftar harga dan aplikasi yang tersedia, ketik “list”.
+
+Jika ada pertanyaan, jangan ragu untuk bertanya. Selamat berbelanja! 🚀`;
+          await sock.sendMessage(update.id, { text: welcomeMessage, mentions: [participant] });
+        }
+      }
+    } catch (err) {
+      // Tidak menampilkan log error agar output console tetap minimal
     }
+  });
+}
 
-    for (const participant of participants) {
-      // Jika member sudah disambut sebelumnya, lewati
-      if (welcomedMembers[id].has(participant)) continue;
-      
-      // Tandai member sebagai sudah disambut
-      welcomedMembers[id].add(participant);
-
-      // Kirim pesan welcome sekali saja
-      await sock.sendMessage(id, {
-        text: `🎉 Selamat Datang di *${groupName}*! 🎉
-
-Hai, @${participant.split("@")[0]}! 👋 Senang kamu bergabung di sini. Untuk melihat daftar harga dan aplikasi yang tersedia, ketik *list*.  
-
-Jika ada pertanyaan, jangan ragu untuk bertanya. Selamat berbelanja! 🚀`,
-        mentions: [participant],
-      });
-    }
-  } catch (error) {
-    console.error("Error in welcomeHandler:", error);
-  }
-};
-
-module.exports = { welcomeHandler };
+module.exports = { handleWelcome };

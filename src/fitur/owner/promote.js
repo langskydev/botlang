@@ -1,131 +1,133 @@
-// src/fitur/owner/promote.js
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-const groupConfig = require('../../groupConfig');
+const { groupId } = require('../../config');
 
-let promotionInterval = null; // Variabel untuk menyimpan ID interval promosi
+// Inisialisasi antrian promosi dan status
+let promotionQueue = [];
+let isCooldown = false;
+let promoteEnabled = true; // Status default aktif
 
-async function handlePromote(sock, m) {
+// Asynchronous function untuk mengambil semua ID grup kecuali grup utama
+async function getAllGroupIds(sock) {
   try {
-    // Ambil isi pesan dari berbagai properti, termasuk caption jika berupa image
-    const messageContent =
-      m.message.conversation ||
-      (m.message.extendedTextMessage && m.message.extendedTextMessage.text) ||
-      (m.message.imageMessage && m.message.imageMessage.caption);
-    if (!messageContent) return;
-
-    // Validasi: hanya admin yang terdaftar di groupConfig.admins yang diperbolehkan
-    const sender = m.key.remoteJid;
-    if (!groupConfig.admins.includes(sender)) {
-      await sock.sendMessage(sender, { text: "Anda tidak memiliki izin untuk menggunakan fitur ini." });
-      return;
-    }
-
-    // Perintah berhenti promosi: "stoppromote"
-    if (messageContent.toLowerCase().trim() === "stoppromote") {
-      if (promotionInterval) {
-        clearInterval(promotionInterval);
-        promotionInterval = null;
-        await sock.sendMessage(sender, { text: "Promosi telah dihentikan." });
-      } else {
-        await sock.sendMessage(sender, { text: "Promosi tidak sedang berjalan." });
-      }
-      return;
-    }
-
-    // Pastikan pesan diawali dengan "promote|"
-    if (!messageContent.startsWith("promote|")) return;
-
-    // Pisahkan perintah dan teks promosi
-    const parts = messageContent.split("|");
-    if (parts.length < 2) {
-      await sock.sendMessage(sender, { text: "Format perintah salah. Gunakan: promote|teks promosi" });
-      return;
-    }
-    const promoteText = parts.slice(1).join("|").trim();
-    if (!promoteText) {
-      await sock.sendMessage(sender, { text: "Teks promosi tidak boleh kosong." });
-      return;
-    }
-
-    // Cek apakah pesan admin mengandung gambar
-    let imageBuffer = null;
-    if (m.message.imageMessage) {
-      const stream = await downloadContentFromMessage(m.message.imageMessage, 'image');
-      const bufferArray = [];
-      for await (const chunk of stream) {
-        bufferArray.push(chunk);
-      }
-      imageBuffer = Buffer.concat(bufferArray);
-    }
-
-    // Ambil daftar semua grup yang diikuti bot
-    let groups;
-    try {
-      groups = await sock.groupFetchAllParticipating();
-    } catch (error) {
-      console.error("Error fetching participating groups:", error);
-      await sock.sendMessage(sender, { text: "Gagal mengambil daftar grup. Promosi dibatalkan." });
-      return;
-    }
-    const allGroupIds = Object.keys(groups);
-    // Target grup: semua grup kecuali yang ada di groupConfig.allowedGroups
-    const targetGroupIds = allGroupIds.filter(id => !groupConfig.allowedGroups.includes(id));
-
-    // Fungsi untuk mengirim promo ke satu grup
-    async function sendPromo(groupId, groupData) {
-      let mentions = [];
-      if (groupData && groupData.participants) {
-        mentions = groupData.participants.map(p => p.id);
-      }
-      const payload = imageBuffer
-        ? { image: imageBuffer, caption: promoteText, mentions }
-        : { text: promoteText, mentions };
-      try {
-        await sock.sendMessage(groupId, payload);
-      } catch (error) {
-        console.error(`Gagal mengirim promo ke grup ${groupId}:`, error);
-      }
-    }
-
-    // Kirim pesan awal ke seluruh target grup secara paralel (tanpa delay)
-    await Promise.all(targetGroupIds.map(async groupId => {
-      const groupData = groups[groupId];
-      await sendPromo(groupId, groupData);
-    }));
-
-    // Konfirmasi ke admin bahwa pesan awal telah dikirim
-    await sock.sendMessage(sender, { 
-      text: `Promosi telah dikirim ke ${targetGroupIds.length} grup. Pesan akan dikirim ulang setiap ${groupConfig.promotionInterval / 60000} menit.` 
-    });
-
-    // Hentikan interval promosi jika sedang berjalan
-    if (promotionInterval) {
-      clearInterval(promotionInterval);
-    }
-
-    // Set interval untuk mengirim ulang pesan sesuai konfigurasi
-    promotionInterval = setInterval(async () => {
-      try {
-        let groupsInterval;
-        try {
-          groupsInterval = await sock.groupFetchAllParticipating();
-        } catch (error) {
-          console.error("Error fetching groups in interval:", error);
-          return;
-        }
-        const groupIdsInterval = Object.keys(groupsInterval).filter(id => !groupConfig.allowedGroups.includes(id));
-        await Promise.all(groupIdsInterval.map(async groupId => {
-          const groupData = groupsInterval[groupId];
-          await sendPromo(groupId, groupData);
-        }));
-      } catch (error) {
-        console.error("Error saat mengirim pesan ulang promosi:", error);
-      }
-    }, groupConfig.promotionInterval);
-
+    const groupsData = await sock.groupFetchAllParticipating();
+    let groups = Object.keys(groupsData);
+    // Saring agar tidak termasuk grup utama (groupId)
+    groups = groups.filter(g => g !== groupId);
+    return groups;
   } catch (err) {
-    console.error("Error pada fitur promote:", err);
+    console.error("Error fetching group ids:", err);
+    return [];
   }
+}
+
+// Fungsi untuk broadcast promosi ke semua grup (kecuali grup utama)
+async function broadcastPromotion(sock, promotionText) {
+  const groups = await getAllGroupIds(sock);
+  for (const gid of groups) {
+    await sock.sendMessage(gid, { text: promotionText });
+  }
+}
+
+// Fungsi untuk memproses antrian promosi dengan jeda 30 menit antar pesan
+function processPromotion(sock) {
+  if (promotionQueue.length === 0) return;
+  const promotionText = promotionQueue.shift();
+  // Jika fitur promote nonaktif, jangan broadcast
+  if (!promoteEnabled) return;
+  broadcastPromotion(sock, promotionText);
+  isCooldown = true;
+  setTimeout(() => {
+    isCooldown = false;
+    processPromotion(sock);
+  }, 30 * 60 * 1000); // 30 menit
+}
+
+async function handlePromote(sock) {
+  sock.ev.on('messages.upsert', async (event) => {
+    for (const message of event.messages) {
+      // Proses hanya pesan dari chat pribadi
+      if (message.key.fromMe) continue;
+      const sender = message.key.remoteJid;
+      if (sender.endsWith('@g.us')) continue; // hanya chat pribadi
+
+      // Ambil teks pesan dari conversation atau extendedTextMessage
+      let text = "";
+      if (message.message.conversation) {
+        text = message.message.conversation;
+      } else if (message.message.extendedTextMessage?.text) {
+        text = message.message.extendedTextMessage.text;
+      }
+      if (!text) continue;
+      text = text.trim();
+      const lowerText = text.toLowerCase();
+
+      // Jika perintah adalah "promoteof", nonaktifkan fitur promote
+      if (lowerText === "promoteof") {
+        try {
+          // Verifikasi admin dengan menggunakan metadata grup utama
+          const groupMeta = await sock.groupMetadata(groupId);
+          const isAdmin = groupMeta.participants.some(p =>
+            p.id === sender && (p.admin === "admin" || p.admin === "superadmin")
+          );
+          if (!isAdmin) {
+            await sock.sendMessage(sender, { text: "Anda tidak memiliki izin untuk mengubah status promote." });
+            continue;
+          }
+        } catch (err) {
+          await sock.sendMessage(sender, { text: "Terjadi kesalahan saat memverifikasi status admin." });
+          continue;
+        }
+        promoteEnabled = false;
+        await sock.sendMessage(sender, { text: "Fitur promote telah dinonaktifkan." });
+        return;
+      }
+      // Jika perintah adalah "promoteon", aktifkan fitur promote
+      if (lowerText === "promoteon") {
+        try {
+          const groupMeta = await sock.groupMetadata(groupId);
+          const isAdmin = groupMeta.participants.some(p =>
+            p.id === sender && (p.admin === "admin" || p.admin === "superadmin")
+          );
+          if (!isAdmin) {
+            await sock.sendMessage(sender, { text: "Anda tidak memiliki izin untuk mengubah status promote." });
+            continue;
+          }
+        } catch (err) {
+          await sock.sendMessage(sender, { text: "Terjadi kesalahan saat memverifikasi status admin." });
+          continue;
+        }
+        promoteEnabled = true;
+        await sock.sendMessage(sender, { text: "Fitur promote telah diaktifkan." });
+        // Jika ada promosi tertunda, proses sekarang
+        if (!isCooldown && promotionQueue.length > 0) {
+          processPromotion(sock);
+        }
+        return;
+      }
+      
+      // Proses perintah promosi: harus diawali dengan "promote |"
+      if (lowerText.startsWith("promote |")) {
+        if (!promoteEnabled) {
+          await sock.sendMessage(sender, { text: "Fitur promote sedang nonaktif." });
+          continue;
+        }
+        const parts = text.split("|");
+        if (parts.length < 2) {
+          await sock.sendMessage(sender, { text: "Format tidak valid. Gunakan: promote | teks promosi" });
+          continue;
+        }
+        const promotionText = parts.slice(1).join("|").trim();
+        if (!promotionText) {
+          await sock.sendMessage(sender, { text: "Teks promosi tidak boleh kosong." });
+          continue;
+        }
+        promotionQueue.push(promotionText);
+        await sock.sendMessage(sender, { text: `Promosi telah ditambahkan ke antrian: "${promotionText}"` });
+        if (!isCooldown) {
+          processPromotion(sock);
+        }
+      }
+    }
+  });
 }
 
 module.exports = { handlePromote };

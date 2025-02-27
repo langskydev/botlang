@@ -1,161 +1,153 @@
-// index.js
-
-// Override console logging di environment production untuk mengurangi spam log
-if (process.env.NODE_ENV === 'production') {
-    console.log = () => { };
-    console.debug = () => { };
-    console.info = () => { };
-}
-
-const pino = require('pino'); // Impor pino untuk mengatur level logger
 const { DisconnectReason, makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const groupConfig = require('./src/groupConfig');
-const listFeature = require('./src/fitur/store/list');
-const priceManager = require('./src/fitur/store/managePrice');
-// Impor fitur pesan pesanan (pending)
-const pendingOrder = require('./src/fitur/store/pesanPesanan');
-const { welcomeHandler } = require('./src/fitur/group/welcome');
-const { hidetag } = require('./src/fitur/group/hidetag');
-const { antilinkHandler } = require('./src/fitur/group/antilink');
-const { handleForbiddenWordCommand, forbiddenWordChecker } = require('./src/fitur/group/forbiddenWords');
-const { tutupGrup } = require('./src/fitur/group/tutupGrup');
-const { bukaGrup } = require('./src/fitur/group/bukaGrup');
-const { handleAfk } = require('./src/fitur/group/afk');
-// Impor file backup agar cronjob berjalan
-require('./src/backup/backup');
-// Import file promote
-const { handlePromote } = require('./src/fitur/owner/promote');
+const { handleWelcome } = require('./src/fitur/group/welcome');
+const { handleList } = require('./src/fitur/group/list');
+const { handleOrderProcess } = require('./src/fitur/group/orderProcess');
+const { handleGroupManage } = require('./src/fitur/admin/groupManage');
+const { hidetag } = require('./src/fitur/admin/hidetag');
+const { handleAntilink } = require('./src/fitur/group/antilink');
+const { handleAntibadwordGroup } = require('./src/fitur/group/antibadword')
 
-// Cek agar file tempcoderunnerfile.js tidak digunakan
-if (process.argv[1] && process.argv[1].includes('tempcoderunnerfile.js')) {
-    console.log('Jalankan file index.js, bukan tempcoderunnerfile.js');
-    process.exit(0);
-}
+
+const { handleWelcomeControl } = require('./src/fitur/owner/welcomeControl');
+const { handleListProductControl } = require('./src/fitur/owner/listProductControl');
+const { handlePromote } = require('./src/fitur/owner/promote');
+const { handleResetLink } = require('./src/fitur/owner/resetlink');
+const { handleSetPP } = require('./src/fitur/owner/setpp');
+const { handleRename } = require('./src/fitur/owner/rename');
+
+const { handleAntilinkControl } = require('./src/fitur/owner/antilinkControl');
+const { handleAntibadword } = require('./src/fitur/owner/antibadword');
+const { groupId } = require('./src/config');
+const fs = require('fs');
+const path = require('path');
+
+// Jalankan backup (jika diperlukan)
+require('./src/backup');
 
 async function connectToWhatsApp() {
-    try {
-        const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-        // Tambahkan queryTimeoutMs untuk memperpanjang waktu timeout query (misalnya 60 detik)
-        const sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: true,
-            logger: pino({ level: 'error' }),
-            queryTimeoutMs: 60000 // timeout query diperpanjang menjadi 60 detik
-        });
+  const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: true,
+  });
 
-        // Menangani update koneksi
-        sock.ev.on('connection.update', (update) => {
-            const { connection, lastDisconnect } = update;
-            if (connection === 'close') {
-                const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-                if (lastDisconnect?.error) {
-                    console.error('Connection closed due to', lastDisconnect.error, ', reconnecting:', shouldReconnect);
-                }
-                if (shouldReconnect) {
-                    setTimeout(connectToWhatsApp, 5000);
-                }
-            }
-        });
-
-        // Tangani error global pada socket
-        sock.ev.on('error', (err) => {
-            console.error('Socket error:', err);
-        });
-
-        sock.ev.on('creds.update', saveCreds);
-
-        // Pendaftaran event group-participants.update hanya sekali (di luar messages.upsert)
-        sock.ev.on('group-participants.update', async (update) => {
-            try {
-                await welcomeHandler(sock, update);
-            } catch (error) {
-                console.error('Error pada welcomeHandler:', error);
-            }
-        });
-
-        sock.ev.on('messages.upsert', async (event) => {
-            for (const m of event.messages) {
-                if (!m.message) continue;
-                if (m.key.fromMe) continue;
-
-                try {
-                    await handleAfk(sock, m);
-                } catch (error) {
-                    console.error('Error di handleAfk:', error);
-                }
-
-                try {
-                    await hidetag(sock, m);
-                } catch (error) {
-                    console.error('Error di hidetag:', error);
-                }
-
-                try {
-                    await forbiddenWordChecker(sock, m);
-                } catch (error) {
-                    console.error('Error di forbiddenWordChecker:', error);
-                }
-
-                try {
-                    await antilinkHandler(sock, m);
-                } catch (error) {
-                    console.error('Error di antilinkHandler:', error);
-                }
-
-                try {
-                    await tutupGrup(sock, m);
-                } catch (error) {
-                    console.error('Error di tutupGrup:', error);
-                }
-
-                try {
-                    await bukaGrup(sock, m);
-                } catch (error) {
-                    console.error('Error di bukaGrup:', error);
-                }
-
-                const remoteJid = m.key.remoteJid;
-
-                if (!remoteJid.endsWith('@g.us')) {
-                    try {
-                        await handlePromote(sock, m);
-                    } catch (error) {
-                        console.error('Error di handlePromote:', error);
-                    }
-
-                    try {
-                        await handleForbiddenWordCommand(sock, m);
-                    } catch (error) {
-                        console.error('Error di handleForbiddenWordCommand:', error);
-                    }
-                }
-
-                if (groupConfig.allowedGroups.includes(remoteJid)) {
-                    try {
-                        listFeature.handleMessage(sock, m);
-                    } catch (error) {
-                        console.error('Error di listFeature.handleMessage:', error);
-                    }
-                }
-
-                try {
-                    priceManager.handlePriceCommand(sock, m);
-                } catch (error) {
-                    console.error('Error di priceManager.handlePriceCommand:', error);
-                }
-
-                try {
-                    pendingOrder.handlePendingMessage(sock, m);
-                } catch (error) {
-                    console.error('Error di pendingOrder.handlePendingMessage:', error);
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Error saat menghubungkan ke WhatsApp:', error);
-        setTimeout(connectToWhatsApp, 5000);
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'open') {
+      console.log('Bot connect');
+    } else if (connection === 'close') {
+      if ((lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut) {
+        connectToWhatsApp();
+      } else {
+        console.log('Bot berhenti');
+      }
     }
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  // --- Fitur Owner (Chat Pribadi) ---
+  handleWelcomeControl(sock);
+  handleListProductControl(sock);
+  handlePromote(sock);
+  handleResetLink(sock);
+  handleSetPP(sock);
+  handleRename(sock);
+  handleAntilinkControl(sock);
+
+  // --- Fitur Grup (Hanya aktif untuk grup dengan ID = groupId) ---
+  // Semua fitur grup hanya akan diproses jika pesan berasal dari grup yang sesuai.
+  handleWelcome(sock);           
+  handleOrderProcess(sock);      
+  handleGroupManage(sock);       
+  handleAntilink(sock);         
+  handleAntibadword(sock);
+  handleAntibadwordGroup(sock);
+
+  // Handler untuk hidetag, hanya untuk grup yang id-nya tepat groupId
+  sock.ev.on('messages.upsert', async (event) => {
+    for (const message of event.messages) {
+      if (message.key.fromMe) continue;
+      const chatId = message.key.remoteJid;
+      if (chatId !== groupId) continue; // Hanya proses pesan dari grup target
+      await hidetag(sock, message);
+    }
+  });
+
+  // Handler pesan utama untuk perintah grup (lookup produk, list, dsb)
+  sock.ev.on('messages.upsert', async (event) => {
+    // Fungsi sinkron untuk membaca daftar badword
+    const BADWORD_FILE = path.join(__dirname, 'src', 'database', 'badword', 'badwords.json');
+    function readBadwordsSync() {
+      if (!fs.existsSync(BADWORD_FILE)) return [];
+      try {
+        const data = fs.readFileSync(BADWORD_FILE, 'utf8');
+        return JSON.parse(data);
+      } catch (err) {
+        console.error('Error membaca badword:', err);
+        return [];
+      }
+    }
+    const badwords = readBadwordsSync();
+
+    for (const message of event.messages) {
+      if (message.key.fromMe || !message.message) continue;
+      
+      const chatId = message.key.remoteJid;
+      if (chatId !== groupId) continue; // Proses hanya dari grup target
+      
+      let text = "";
+      if (message.message.conversation) {
+        text = message.message.conversation;
+      } else if (message.message.extendedTextMessage?.text) {
+        text = message.message.extendedTextMessage.text;
+      }
+      text = text.trim().toLowerCase();
+      
+      // Jika pesan mengandung badword, lewati pemrosesan perintah
+      const containsForbidden = badwords.some(word => text.includes(word));
+      if (containsForbidden) continue;
+
+      // Struktur switch-case untuk perintah grup
+      switch (text) {
+        case "list":
+          await handleList(sock, message);
+          break;
+        case "p":
+        case "d":
+        case "cl":
+        case "op":
+          // Perintah-perintah ini sudah diproses di modul masing-masing
+          break;
+        default:
+          // Lookup produk berdasarkan nama
+          const dataFilePath = path.join(__dirname, 'database', 'listproduct', 'data.json');
+          let productData = {};
+          try {
+            if (fs.existsSync(dataFilePath)) {
+              const data = await fs.promises.readFile(dataFilePath, 'utf8');
+              productData = JSON.parse(data);
+            }
+          } catch (err) {
+            console.error("Error reading product data:", err);
+          }
+          if (productData.hasOwnProperty(text)) {
+            const product = productData[text];
+            if (product && typeof product === 'object' && product.image && fs.existsSync(product.image)) {
+              const imgBuffer = fs.readFileSync(product.image);
+              await sock.sendMessage(chatId, { image: imgBuffer, caption: product.price }, { quoted: message });
+            } else if (product && typeof product === 'object') {
+              await sock.sendMessage(chatId, { text: product.price }, { quoted: message });
+            } else {
+              await sock.sendMessage(chatId, { text: product }, { quoted: message });
+            }
+          } else {
+            await sock.sendMessage(chatId, { text: 'Perintah tidak dikenali. Silahkan ketik perintah yang valid.' }, { quoted: message });
+          }
+          break;
+      }
+    }
+  });
 }
 
 connectToWhatsApp();
