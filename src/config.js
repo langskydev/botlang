@@ -1,3 +1,3 @@
 module.exports = {
-  groupId: '120363352064937256@g.us'
+  groupId: "120363348122136023@g.us",
 };
