@@ -1,0 +1,251 @@
+[
+  {
+    "title": "NETFLIX",
+    "id": "netflix",
+    "categories": [
+      {
+        "name": "1P1U",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "38.000"
+          },
+          {
+            "name": "2Bulan",
+            "price": "70.000"
+          },
+          {
+            "name": "3Bulan",
+            "price": "105.000"
+          }
+        ]
+      },
+      {
+        "name": "1P2U",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "25.000"
+          },
+          {
+            "name": "2Bulan",
+            "price": "45.000"
+          },
+          {
+            "name": "3Bulan",
+            "price": "70.000"
+          }
+        ]
+      },
+      {
+        "name": "SEMI PRIV 1U",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "72.000"
+          }
+        ]
+      },
+      {
+        "name": "SEMI PRIV 2U",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "45.000"
+          }
+        ]
+      },
+      {
+        "name": "PRIVATE",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "170.000"
+          }
+        ]
+      }
+    ],
+    "image": {
+      "name": "netflix_1740844184672.jpg",
+      "type": "image",
+      "data": "C:\\Users\\pc1\\Desktop\\project\\bot\\base-chiwa\\database\\kategori_images\\netflix_1740844184672.jpg"
+    }
+  },
+  {
+    "title": "VIDIO",
+    "id": "vidio",
+    "categories": [
+      {
+        "name": "SHARING",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "25.000"
+          }
+        ]
+      },
+      {
+        "name": "PRIVATE",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "35.000"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "VIU",
+    "id": "viu",
+    "categories": [
+      {
+        "name": "PREMIUM BIASA",
+        "durasi": [
+          {
+            "name": "3Bulan",
+            "price": "20.000"
+          },
+          {
+            "name": "6Bulan",
+            "price": "30.000"
+          },
+          {
+            "name": "1Tahun",
+            "price": "40.000"
+          }
+        ]
+      },
+      {
+        "name": "ANTI LIMIT",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "15.000"
+          },
+          {
+            "name": "3Bulan",
+            "price": "25.000"
+          },
+          {
+            "name": "5Bulan",
+            "price": "30.000"
+          },
+          {
+            "name": "1Tahun",
+            "price": "45.000"
+          }
+        ]
+      }
+    ],
+    "image": {
+      "name": "viu_1740844294693.jpg",
+      "type": "image",
+      "data": "C:\\Users\\pc1\\Desktop\\project\\bot\\base-chiwa\\database\\kategori_images\\viu_1740844294693.jpg"
+    }
+  },
+  {
+    "title": "WETV",
+    "id": "wetv",
+    "categories": [
+      {
+        "name": "SHARING",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "25.000"
+          }
+        ]
+      },
+      {
+        "name": "PRIVATE",
+        "durasi": [
+          {
+            "name": "1Tahun",
+            "price": "40.000"
+          }
+        ]
+      }
+    ],
+    "image": {
+      "name": "wetv_1740842225468.jpg",
+      "type": "image",
+      "data": "C:\\Users\\pc1\\Desktop\\project\\bot\\base-chiwa\\database\\kategori_images\\wetv_1740842225468.jpg"
+    }
+  },
+  {
+    "title": "AMAZON PRIME VIDIO",
+    "id": "apv",
+    "categories": [
+      {
+        "name": "Sharing6U",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "20.000"
+          }
+        ]
+      },
+      {
+        "name": "Sharing4U",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "25.000"
+          }
+        ]
+      },
+      {
+        "name": "PRIV",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "30.000"
+          }
+        ]
+      }
+    ],
+    "image": {
+      "name": "apv_1740845214976.jpg",
+      "type": "image",
+      "data": "C:\\Users\\pc1\\Desktop\\project\\bot\\base-chiwa\\database\\kategori_images\\apv_1740845214976.jpg"
+    }
+  },
+  {
+    "title": "IQIYI",
+    "id": "iqiyi",
+    "categories": [
+      {
+        "name": "SHARING",
+        "durasi": [
+          {
+            "name": "1Bulan",
+            "price": "15.000"
+          },
+          {
+            "name": "1Tahun",
+            "price": "30.000"
+          }
+        ]
+      },
+      {
+        "name": "PRIVATE",
+        "durasi": [
+          {
+            "name": "1Tahun",
+            "price": "40.000"
+          }
+        ]
+      }
+    ],
+    "image": {
+      "name": "iqiyi_1740845903875.jpg",
+      "type": "image",
+      "data": "C:\\Users\\pc1\\Desktop\\project\\bot\\base-chiwa\\database\\kategori_images\\iqiyi_1740845903875.jpg"
+    }
+  },
+  {
+    "title": "CANVA",
+    "id": "canva"
+  }
+]

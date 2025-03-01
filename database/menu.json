@@ -1,0 +1,31 @@
+{
+  "Owner Menu": {
+    "button": {
+      "alias": []
+    },
+    "buttonfoto": {
+      "alias": []
+    },
+    "addmenu": {
+      "alias": []
+    },
+    "addalias": {
+      "alias": []
+    },
+    "addcmd": {
+      "alias": []
+    },
+    "delalias": {
+      "alias": []
+    },
+    "menu": {
+      "alias": []
+    },
+    "cs": {
+      "alias": []
+    },
+    "testimoni": {
+      "alias": []
+    }
+  }
+}

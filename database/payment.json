@@ -1,0 +1,47 @@
+[
+  {
+    "name": "QRIS",
+    "type": "image",
+    "data": "C:\\Users\\pc1\\Desktop\\project\\bot\\base-chiwa\\database\\payment_images\\qris_1740808448575.jpg"
+  },
+  {
+    "name": "DANA",
+    "type": "rekening",
+    "data": {
+      "norek": "081455124049",
+      "atasnama": "CANDRA ADI KUSUMA"
+    }
+  },
+  {
+    "name": "BRI",
+    "type": "rekening",
+    "data": {
+      "norek": " 068001007528536",
+      "atasnama": "CANDRA ADI KUSUMA"
+    }
+  },
+  {
+    "name": "GOPAY",
+    "type": "rekening",
+    "data": {
+      "norek": "082338184217",
+      "atasnama": "CANDRA ADI KUSUMA"
+    }
+  },
+  {
+    "name": "Shope",
+    "type": "rekening",
+    "data": {
+      "norek": "082338184217",
+      "atasnama": "CANDRA ADI KUSUMA"
+    }
+  },
+  {
+    "name": "OVO",
+    "type": "rekening",
+    "data": {
+      "norek": "082338184217",
+      "atasnama": "CANDRA ADI KUSUMA"
+    }
+  }
+]
