@@ -1,3 +1,7 @@
 node_modules
+<<<<<<< HEAD
 session
 temp
+=======
+auth_info_baileys
+>>>>>>> 482f626fefd2f81658daee029592950fe137e275
